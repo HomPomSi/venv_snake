@@ -15,6 +15,7 @@ class Snake(object):
     def __init__(self, parts: List[Tuple[int]], direction: Direction = Direction.EAST) -> None:
         self.parts: List[Tuple[int]] = parts
         self.direction = direction
+        self.pause = 0
 
     def get_size(self) -> int:
         return len(self.parts)
@@ -28,8 +29,7 @@ class Snake(object):
             self.shrink(-value)
 
     def grow(self, size: int = 1) -> None:
-        for _ in range(size):
-            self.parts.append(((self.parts[-1][0] + self.direction.value[0])%19, (self.parts[-1][1] + self.direction.value[1])%32))
+        self.pause += size
 
     def shrink(self, size: int) -> None:
         if size >= len(self.parts):
@@ -42,7 +42,10 @@ class Snake(object):
             direction = self.direction
         self.direction = direction
         self.parts.append(((self.parts[-1][0] + direction.value[0])%19, (self.parts[-1][1] + direction.value[1])%32))
-        del self.parts[0]
+        if self.pause <= 0:
+            del self.parts[0]
+        else:
+            self.pause -= 1
 
     def draw(self) -> None:
         for index, part in enumerate(self.parts):

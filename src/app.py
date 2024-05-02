@@ -45,17 +45,23 @@ class App(object):
 
             clock.tick(144)
             pygame.display.update()
+    
 
     def game(self) -> None:
         running = True
         snake = Snake([(10, 2), (10, 3)])
-        fruit = Apple((random.randint(0, 16), random.randint(0, 32)))
         direction: Direction = Direction.EAST
-        fruits = [Apple, Cherry, Ginger]
+        fruit_types = [Apple, Cherry, Ginger]
+        fruits = []
+        fruit_spawn_delay = random.random() * 3
+        fruit_spawn_time = time.time()
+
         snake_update_time = time.time()
         input_buffer = []
+        background = pygame.image.load("resources/background.png")
         while running:
             display.fill((0xe0, 0xbb, 0xe4))
+            display.blit(background, (0, 0))
             mouse_pos = pygame.mouse.get_pos()
             for event in pygame.event.get():
                 match event.type:
@@ -91,11 +97,6 @@ class App(object):
                     pygame.draw.rect(display, 0x000000, (100 + column*32, 100 + row*32, 32, 32), 1)
 
 
-            # Chek if fruit is still alive and replace otherwise
-            if not fruit.is_alive:
-                fruit = random.choice(fruits)((random.randint(0, 18), random.randint(0, 31)))
-
-
             # Update snake movement based on direction inputs
             if time.time() - snake_update_time >= .1:
                 snake.update(input_buffer[0])
@@ -107,16 +108,29 @@ class App(object):
                     if part == snake.parts[-1]:
                         running = False
 
+            
+            if time.time() - fruit_spawn_time > fruit_spawn_delay and len(fruits) <= 8:
+                fruit_spawn_time = time.time()
+                fruit_spawn_delay = random.random() * 3
+                pos = (random.randint(0, 18), random.randint(0, 31))
+                while pos in snake.parts:
+                    pos = (random.randint(0, 18), random.randint(0, 31))
+                tmp.append(random.choice(fruit_types)(pos))
 
             # Check if snake ate fruit
-            if fruit.pos == snake.parts[-1]:
-                snake.eat(fruit)
-                fruit = random.choice(fruits)((random.randint(0, 18), random.randint(0, 31)))
+            tmp = []
+            for fruit in fruits:
+                fruit.update()
+                tmp.append(fruit)
 
-            fruit.update()
+                if fruit.pos == snake.parts[-1]:
+                    snake.eat(fruit)
+                    del tmp[-1]
+
+                fruit.draw()
+            fruits = tmp 
 
             snake.draw()
-            fruit.draw()
 
 
             clock.tick(144)
