@@ -11,6 +11,7 @@ from typing import Tuple, List
 class Consumable(object):
     "POSITIONS are handles as index"
     def __init__(self, pos: Tuple[int], lifetime: int = 15) -> None:
+        self._name = str(self.__class__).split(".")[-1][:-2]
         self.pos = pos
         self.birth = time.time()
         self.lifetime = lifetime
@@ -36,7 +37,13 @@ class Consumable(object):
     def draw(self) -> None:
         if self.is_alive:
             self._draw()
+    
+    def __str__(self) -> str:
+        return self._name
+    
 
+    def __repr__(self) -> str:
+        return f"{self._name} at {self.pos}, living since {self.birth} till {self.death}"
 
 
 class Fruit(Consumable):
