@@ -66,12 +66,19 @@ class Snake(object):
             if index == len(self.parts) - 1:
                 display.blit(pygame.transform.rotate(Snake.head_image, self.direction.value[2] * 90), (pos[0] - 16, pos[1] - 16))
             elif index == 0:
-                pygame.draw.circle(display, 0x12e012, translate_idx2pos(part.pos), 16, 0)
+                match part.to:
+                    case Direction.EAST:
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 23, 16), 0)
+                    case Direction.SOUTH:
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 16, 23), 0)
+                    case Direction.WEST:
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 15, pos[1] - 8, 23, 16), 0)
+                    case Direction.NORTH:
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 15, 16, 23), 0)
             else:
                 self._draw_part(part)
-                #pygame.draw.circle(display, 0x12e012, pos, 16, 0)
-                #display.blit(pygame.transform.rotate(Snake.body_image, self.direction.value[2] * 90), (pos[0] - 16, pos[1] - 16))
-    
+   
+
     def _draw_part(self, part: PartInfo) -> None:
         pos = translate_idx2pos(part.pos)
         
