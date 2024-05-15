@@ -16,7 +16,9 @@ class PartInfo(object):
         self.pos = pos
         self.into = into
         self.to = to
-
+    
+    def __repr__(self) -> str:
+        return f"{self.pos}: {self.into} -> {self.to}"
 
 
 class Snake(object):
@@ -25,8 +27,22 @@ class Snake(object):
     body_image = pygame.image.load("resources/snake_body.png")
     def __init__(self, parts: List[Tuple[PartInfo]], direction: Direction = Direction.EAST) -> None:
         self.parts: List[Tuple[PartInfo]] = parts
-        self.direction = direction
+        self._direction = direction
         self.pause = 0
+    
+    @property
+    def direction(self) -> Direction:
+        return self._direction
+
+    @direction.setter
+    def direction(self, value: Direction) -> None:
+        if not isinstance(value, Direction):
+            raise ValueError("Snake.direction has to be Direction type")
+        
+        # Do not change direction when new direction point into opposite direction
+        if not (self.direction.value[0] + value.value[0] == 0 or self.direction.value[1] + value.value[1] == 0):
+            self._direction = value
+
 
     def get_size(self) -> int:
         return len(self.parts)
@@ -47,14 +63,13 @@ class Snake(object):
             raise GameOverException("Snake starved to Death")
         self.parts = self.parts[size:]
 
-    def update(self, direction: Direction) -> None:
-        # Do not change direction when new direction point into opposite direction
-        if self.direction.value[0] + direction.value[0] == 0 and self.direction.value[1] + direction.value[1] == 0:
-            direction = self.direction
-        self.direction = direction
-        self.parts.append(PartInfo(((self.parts[-1].pos[0] + direction.value[0])%19, (self.parts[-1].pos[1] + direction.value[1])%32), self.direction, direction))
+    def update(self) -> None:
+        self.parts.append(PartInfo(((self.parts[-1].pos[0] + self.direction.value[0])%GRID_SIZE[0], (self.parts[-1].pos[1] + self.direction.value[1])%GRID_SIZE[1]), self.direction, self.direction))
+        self.parts[-1].into = self.parts[-1].to
         if len(self.parts) >= 2:
             self.parts[-2].to = self.direction
+
+        # Simulate snake growing by not deleting older parts for fix amunt of steps
         if self.pause <= 0:
             del self.parts[0]
         else:
@@ -62,19 +77,22 @@ class Snake(object):
 
     def draw(self) -> None:
         for index, part in enumerate(self.parts):
-            pos = translate_idx2pos(part.pos)
             if index == len(self.parts) - 1:
-                display.blit(pygame.transform.rotate(Snake.head_image, self.direction.value[2] * 90), (pos[0] - 16, pos[1] - 16))
+                pos = translate_idx2pos(part.pos, centered = False)
+                display.blit(pygame.transform.rotate(Snake.head_image, self.direction.value[2] * 90), pos)
+                #pos = translate_idx2pos(part.pos)
+                #pygame.draw.circle(display, Color.GREEN, pos, min(CELL_SIZE)//2, 0)
             elif index == 0:
+                pos = translate_idx2pos(part.pos)
                 match part.to:
                     case Direction.EAST:
-                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 23, 16), 0)
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2), 0)
                     case Direction.SOUTH:
-                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 16, 23), 0)
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1), 0)
                     case Direction.WEST:
-                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 15, pos[1] - 8, 23, 16), 0)
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - CELL_SIZE[0]//2 + 1, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2), 0)
                     case Direction.NORTH:
-                        pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 15, 16, 23), 0)
+                        pygame.draw.rect(display, Color.GREEN, (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//2 + 1, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1), 0)
             else:
                 self._draw_part(part)
    
@@ -84,43 +102,51 @@ class Snake(object):
         
         if part.into == part.to:
             if part.into.value[0] == 0:
-                pygame.draw.rect(display, Color.GREEN, (pos[0]-15, pos[1]-8, 30, 16), 0)
+                pygame.draw.rect(display, Color.GREEN, (pos[0]-CELL_SIZE[0]//2 + 1, pos[1]-CELL_SIZE[1]//4, CELL_SIZE[0] - 2, CELL_SIZE[1]//2), 0)
             else:
-                pygame.draw.rect(display, Color.GREEN, (pos[0]-8, pos[1]-15, 16, 30), 0)
+                pygame.draw.rect(display, Color.GREEN, (pos[0]-CELL_SIZE[0]//4, pos[1]-CELL_SIZE[1]//2 + 1, CELL_SIZE[0]//2, CELL_SIZE[1] - 2), 0)
+            return
 
         # works for clockwise
         match (part.into, part.to):
             case (Direction.SOUTH, Direction.EAST):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 15, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//2+1, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
 
             case (Direction.SOUTH, Direction.WEST):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 15, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 15, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//2+1, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//2+1, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
 
             case (Direction.NORTH, Direction.EAST):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
 
             case (Direction.NORTH, Direction.WEST):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 15, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//2+1, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
 
             case (Direction.EAST, Direction.NORTH):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 15, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 15, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//2+1, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//2+1, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
             
             case (Direction.EAST, Direction.SOUTH):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 15, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//2+1, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
             
             case (Direction.WEST, Direction.NORTH):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 15, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//2+1, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
             
             case (Direction.WEST, Direction.SOUTH):
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 23, 16), 0)
-                pygame.draw.rect(display, Color.GREEN, (pos[0] - 8, pos[1] - 8, 16, 23), 0)
+                rect_a = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//4*3-1, CELL_SIZE[1]//2)
+                rect_b = (pos[0] - CELL_SIZE[0]//4, pos[1] - CELL_SIZE[1]//4, CELL_SIZE[0]//2, CELL_SIZE[1]//4*3-1)
+
+        pygame.draw.rect(display, Color.GREEN, rect_a, 0)
+        pygame.draw.rect(display, Color.GREEN, rect_b, 0)
 
 
-
+class DefaultSnake(Snake):
+    """
+    """
+    def __init__(self):
+        super().__init__([PartInfo((GRID_SIZE[0]//2, 2), Direction.EAST, Direction.EAST), PartInfo((GRID_SIZE[0]//2, 3), Direction.EAST, Direction.EAST)])

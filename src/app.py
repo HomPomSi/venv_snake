@@ -8,7 +8,7 @@ from src import *
 from src.exceptions import GameOverException
 from src.utils import *
 from src.enums import Direction
-from src.snake import Snake, PartInfo
+from src.snake import Snake, DefaultSnake, PartInfo
 from src.color import Color
 from src.consumables import *
 
@@ -41,12 +41,6 @@ class App(object):
             write("Press SPACE to start", (0xaa, 0x1b, 0x8c), (0, 0, display_width, display_height), int(120 + math.sin(pygame.time.get_ticks() / animation_speed)*16), centered=True)
             write("Snake alpha1.0", (0xaa, 0x1b, 0x8c), (16, 16), 32)
 
-            color = (0xcc, 0x14, 0x51)
-            if pygame.mouse.get_pressed()[0]:
-                color = (0x14, 0xcc, 0x51)
-            pygame.draw.circle(display, color, mouse_pos, 16, 0)
-
-
             clock.tick(144)
             pygame.display.update()
 
@@ -54,7 +48,7 @@ class App(object):
 
     def game(self) -> None:
         running = True
-        snake = Snake([PartInfo((10, 2), Direction.EAST, Direction.EAST), PartInfo((10, 3), Direction.EAST, Direction.EAST)])
+        snake = DefaultSnake()
         direction: Direction = Direction.EAST
         fruit_types = [Apple, Cherry, Ginger]
         fruits = []
@@ -73,14 +67,14 @@ class App(object):
                             pygame.quit()
                             quit()
                         case pygame.KEYDOWN:
+                            direction = None
                             match event.key:
                                 case pygame.K_ESCAPE:
                                     self.main()
                                 
                                 case pygame.K_SPACE:
                                     self.pause()
-
-                                # Capture movement inputs
+                                
                                 case pygame.K_UP:
                                     direction = Direction.NORTH
                                 case pygame.K_RIGHT:
@@ -89,46 +83,53 @@ class App(object):
                                     direction = Direction.SOUTH
                                 case pygame.K_LEFT:
                                     direction = Direction.WEST
+                            
+                            if direction and (len(input_buffer) < 1 or input_buffer[-1] != direction) and len(input_buffer) < 4:
+                                input_buffer.append(direction)
 
-                # Make sure to capture all inputs in between snake updates using a buffer
-                if len(input_buffer) > 0:
-                    if input_buffer[-1] != direction:
-                        input_buffer.append(direction)
-                else:
-                    input_buffer.append(direction)
-                
-                write(f"Current score: {len(snake.parts)}", Color.WHITE, (100+32*32, 100, display_width-100-32*32, 100), 32, centered=True)
+
+                write(
+                    f"Current score: {len(snake.parts)}", 
+                    Color.WHITE, 
+                    (GRID_POS[0]+GRID_SIZE[1]*CELL_SIZE[0], GRID_POS[1], display_width-GRID_POS[0]-GRID_SIZE[1]*CELL_SIZE[0], GRID_POS[1]), 
+                    32, 
+                    centered=True
+                )
                 self._draw_highscore(len(snake.parts))
 
                 # Drawing grid
-                pygame.draw.rect(display, Color.GRID, (100, 100, 32*32, 19*32), 0)
-                for row in range(19):
-                    for column in range(32):
-                        pygame.draw.rect(display, Color.BLACK, (100 + column*32, 100 + row*32, 32, 32), 1)
+                pygame.draw.rect(display, Color.GRID, GRID_RECT, 0)
+                for row in range(GRID_SIZE[0]):
+                    for column in range(GRID_SIZE[1]):
+                        cell_rect = (*translate_idx2pos((row, column), False), *CELL_SIZE)
+                        pygame.draw.rect(display, Color.BLACK, cell_rect, 1)
 
 
                 # Update snake movement based on direction inputs
-                if time.time() - snake_update_time >= .1:
-                    snake.update(input_buffer[0])
+                if time.time() - snake_update_time >= 1/SNAKE_SPEED:
+                    if len(input_buffer) >= 1:
+                        snake.direction = input_buffer[0]
+                        del input_buffer[0]
+                    snake.update()
                     snake_update_time = time.time()
-                    del input_buffer[0]
 
                     # Check if snake hit obstacle
                     for part in snake.parts[:-1]:
                         if part.pos == snake.parts[-1].pos:
                             snake.draw()
-                            pos = translate_idx2pos(snake.parts[-1].pos)
-                            display.blit(pygame.image.load("resources/explosion.png"), (pos[0] - 16, pos[1] - 16))
+                            pos = translate_idx2pos(snake.parts[-1].pos, centered=False)
+                            display.blit(pygame.image.load("resources/explosion.png"), pos)
                             raise GameOverException(f"Snake ran into itself at {snake.parts[-1].pos}")
                 
-                if time.time() - fruit_spawn_time > fruit_spawn_delay and len(fruits) <= 8:
+
+                if time.time() - fruit_spawn_time > fruit_spawn_delay and len(fruits) <= FRUITS_MAX:
                     fruit_spawn_time = time.time()
                     fruit_spawn_delay = 1 * random.random() * 3  # 1 <= DELAY <= 4
-                    pos = (random.randint(0, 18), random.randint(0, 31))
+                    pos = (random.randint(0, GRID_SIZE[0] - 1), random.randint(0, GRID_SIZE[1] - 1))
 
                     # Make sure new consumable does not spawn inside snake/other consumables
                     while pos in [part.pos for part in snake.parts] or pos in [fruit.pos for fruit in fruits]:
-                        pos = (random.randint(0, 18), random.randint(0, 31))
+                        pos = (random.randint(0, GRID_SIZE[0] - 1), random.randint(0, GRID_SIZE[1] - 1))
                     fruits.append(random.choice(fruit_types)(pos))
                     print(f"Spawning {str(fruits[-1])} at {pos}, spawn next consumable in {fruit_spawn_delay:.2f} seconds")
 
@@ -155,6 +156,10 @@ class App(object):
 
         except GameOverException as gameover_exception:
             print(gameover_exception)
+            if len(snake.parts) > self.highscores[-1]:
+                self.highscores.append(len(snake.parts))
+                self.highscores = sorted(self.highscores)[:0:-1]
+            self._safe_highscores()
             self.gameover()
         
         except Exception as e:
@@ -162,10 +167,11 @@ class App(object):
             self.main()
         
         finally:
-            if len(snake.parts) > self.highscores[-1]:
-                self.highscores.append(len(snake.parts))
-                self.highscores = sorted(self.highscores)[:0:-1]
-            self._safe_highscores()
+            if self._load_highscores() != self.highscores:
+                if len(snake.parts) > self.highscores[-1]:
+                    self.highscores.append(len(snake.parts))
+                    self.highscores = sorted(self.highscores)[:0:-1]
+                self._safe_highscores()
 
 
 
@@ -188,7 +194,7 @@ class App(object):
                             case pygame.K_SPACE:
                                 self.game()
             
-            pygame.draw.rect(display, Color.BACKGROUND, (0, 0, display_width, 100), 0)
+            pygame.draw.rect(display, Color.BACKGROUND, (0, 0, display_width, GRID_POS[1]), 0)
             write("GAME OVER", (0xaa, 0x1b, 0x8c), (0, 0, display_width, display_height//8), int(120 + math.sin(pygame.time.get_ticks() / animation_speed)*16), centered=True)
 
             clock.tick(144)
@@ -214,11 +220,11 @@ class App(object):
                             case pygame.K_SPACE:
                                 running = False
             
-            pygame.draw.rect(display, Color.BACKGROUND, (0, 0, display_width, 100), 0)
+            pygame.draw.rect(display, Color.BACKGROUND, (0, 0, display_width, GRID_POS[1]), 0)
             write("Game paused, press SPACE to continue", (0xaa, 0x1b, 0x8c), (0, 0, display_width, display_height//8), int(60 + math.sin(pygame.time.get_ticks() / animation_speed)*4), centered=True)
 
             clock.tick(144)
-            pygame.display.update((0, 0, display_width, 100))
+            pygame.display.update((0, 0, display_width, GRID_POS[1]))
 
 
 
@@ -231,10 +237,27 @@ class App(object):
             scores = sorted(scores)[:0:-1]
             for rank, score in enumerate(scores):
                 if score == current and not drawn_box:
-                    pygame.draw.rect(display, Color.RED, (100+32*32, display_height//4+rank*((display_height//2)//5), 200, (display_height//2)//5), 4)
+                    pygame.draw.rect(
+                        display, 
+                        Color.RED, 
+                        (GRID_POS[0]+GRID_SIZE[1]*CELL_SIZE[0], display_height//4+rank*((display_height//2)//5), 200, (display_height//2)//5),
+                        4
+                    )
                     drawn_box = True
-                write(f"{rank + 1}:", Color.BLUE, (100+32*32, display_height//4+rank*((display_height//2)//5), 50, (display_height//2)//5), 32, centered=True)
-                write(f"{score}", Color.GREEN, (100+32*32, display_height//4+rank*((display_height//2)//5), 200, (display_height//2)//5), 64, centered=True)
+                write(
+                    f"{rank + 1}:",
+                    Color.BLUE,
+                    (GRID_POS[0]+GRID_SIZE[1]*CELL_SIZE[0], display_height//4+rank*((display_height//2)//5), 50, (display_height//2)//5),
+                    32,
+                    centered = True
+                )
+                write(
+                    f"{score}",
+                    Color.GREEN,
+                    (GRID_POS[0]+GRID_SIZE[1]*CELL_SIZE[0], display_height//4+rank*((display_height//2)//5), 200, (display_height//2)//5),
+                    64,
+                    centered = True
+                )
         except AttributeError as attribute_error:
             self.highscores = self._load_highscores()
 

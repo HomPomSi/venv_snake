@@ -14,9 +14,11 @@ def write(msg: str, color: Tuple[int], pos: Tuple[int], size: int, aa: bool = Tr
 
 
 def translate_pos2idx(pos: Tuple[int]) -> Tuple[int]:
-    return ((pos[1] - 100) // 32, (pos[0] - 100) // 32)
+    return ((pos[1] - GRID_POS[1]) // CELL_SIZE[1], (pos[0] - GRID_POS[0]) // CELL_SIZE[0])
 
 
-def translate_idx2pos(index: Tuple[int]) -> Tuple[int]:
-    return (index[1] * 32 + 100 + 16, index[0] * 32 + 100 + 16)
+def translate_idx2pos(index: Tuple[int], centered: bool = True) -> Tuple[int]:
+    return \
+        int(centered) * (index[1] * CELL_SIZE[0] + GRID_POS[0] + CELL_SIZE[0]//2, index[0] * CELL_SIZE[1] + GRID_POS[1] + CELL_SIZE[1]//2) + \
+        int(not centered) * (index[1] * CELL_SIZE[0] + GRID_POS[0], index[0] * CELL_SIZE[1] + GRID_POS[1])
 
